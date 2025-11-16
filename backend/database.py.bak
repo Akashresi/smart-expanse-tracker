@@ -1,0 +1,20 @@
+# my-app/backend/database.py
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Expect DATABASE_URL in .env, otherwise default to sqlite for local dev
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL_SQLITE") or "sqlite:///./dev.db"
+
+# If using sqlite, recommend check_same_thread for local sync usage
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
