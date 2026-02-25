@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from "axios";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const LOCAL_API_URL = "http://10.63.3.210:8000"; // 👈 Your PC's IP
+const LOCAL_API_URL = "http://10.47.24.210:8000"; // 👈 Your PC's IP
 
 const apiUrl =
   Constants.expoConfig?.extra?.apiUrl ||
