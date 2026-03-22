@@ -1,46 +1,81 @@
-// constants/theme.ts
-import { Dimensions } from 'react-native';
-
 export const COLORS = {
-  primary: '#007AFF', // Main blue
-  primaryDark: '#0056b3',
-  secondary: '#3b82f6', // Chatbot blue
+  primary: '#2563EB',
+  primaryDark: '#1D4ED8',
+  accent: '#7C3AED',
+  success: '#10B981',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  background: '#F8FAFC',
+  card: '#FFFFFF',
+  textPrimary: '#0F172A',
+  textMuted: '#64748B',
+  border: '#E2E8F0',
   
-  success: '#2ecc71', // History green
-  successLight: '#6BCB77',
-  danger: '#ff6b6b', // History red
-  dangerLight: '#ff7675',
-  warning: '#f59e0b', // Analytics tip
-  
+  // Legacy compatibility colors
   white: '#FFFFFF',
-  black: '#000000',
-  
-  // Grays
-  grayLight: '#f9fafb', // Lightest background
-  grayMedium: '#e5e7eb', // Borders
-  grayDark: '#6b7280', // Subtitles, inactive icons
-  text: '#111827', // Main text
+  grayLight: '#F3F4F6',
+  grayMedium: '#9CA3AF',
+  grayDark: '#4B5563',
+  text: '#1F2937',
 };
 
+// Legacy compatibility sizing
 export const SIZING = {
-  // Spacing
   xs: 4,
   sm: 8,
   md: 16,
-  lg: 20,
-  xl: 24,
-
-  // Borders
+  lg: 24,
+  xl: 32,
   radius: 8,
-  
-  // Font Sizes
-  h1: 24,
-  h2: 22,
-  h3: 18,
   body: 16,
-  caption: 14,
-  small: 12,
+  caption: 12,
+  h1: 24,
+  h2: 20,
 };
 
-export const screenWidth = Dimensions.get('window').width;
-export const screenHeight = Dimensions.get('window').height;
+export const SPACING = {
+  xs: 8,
+  sm: 16,
+  md: 24,
+  lg: 32,
+  xl: 40,
+};
+
+export const BORDER_RADIUS = {
+  card: 16,
+  input: 12,
+  pill: 50,
+};
+
+export const SHADOWS = {
+  card: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+};
+
+export const TYPOGRAPHY = {
+  heading: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 26,
+    color: COLORS.textPrimary,
+  },
+  subheading: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 18,
+    color: COLORS.textPrimary,
+  },
+  body: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  caption: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+};
