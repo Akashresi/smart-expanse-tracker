@@ -9,11 +9,13 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=True)
+    full_name = Column(String(100), nullable=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(150), unique=True, index=True, nullable=False)
+    phone = Column(String(20), unique=True, nullable=True)
     password = Column(String(255), nullable=False)
 
-    # ✅ Added new profile fields
+    # Profile fields
     date_of_birth = Column(Date, nullable=True)
     age = Column(Integer, nullable=True)
     gender = Column(String(20), nullable=True)

@@ -5,8 +5,11 @@ from datetime import date as DateType
 
 # ... (UserBase, UserCreate, UserResponse schemas are fine) ...
 class UserBase(BaseModel):
-    name: str
+    full_name: str
+    username: str
     email: str
+    phone: str
+
 class UserCreate(UserBase):
     password: str
     date_of_birth: Optional[DateType] = None

@@ -15,10 +15,14 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 @router.post("/register", response_model=schemas.RegisterResponse)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = crud.get_user_by_email(db, email=user.email)
-    if existing:
+    # Check if email is available
+    if crud.get_user_by_email(db, email=user.email):
         raise HTTPException(status_code=400, detail="Email already registered")
     
+    # Check if username is available
+    if crud.get_user_by_username(db, username=user.username):
+         raise HTTPException(status_code=400, detail="Username already taken")
+
     new_user = crud.create_user(db=db, user=user)
     
     # ✅ Create a token for the new user
@@ -37,7 +41,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=schemas.TokenResponse) # ✅ This will be our token endpoint
 def login(credentials: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    existing = crud.get_user_by_email(db, email=credentials.username)
+    existing = crud.get_user_by_identifier(db, identifier=credentials.username)
     
     if not existing or not crud.verify_password(credentials.password, existing.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
