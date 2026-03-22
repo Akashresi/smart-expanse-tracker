@@ -1,5 +1,6 @@
 # backend/routes/auth.py
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 import crud
 import schemas
@@ -34,9 +35,9 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
         "user": schemas.UserResponse.model_validate(new_user)
     }
 
-@router.post("/login") # ✅ This will be our token endpoint
-def login(credentials: schemas.LoginRequest, db: Session = Depends(get_db)):
-    existing = crud.get_user_by_email(db, email=credentials.email)
+@router.post("/login", response_model=schemas.TokenResponse) # ✅ This will be our token endpoint
+def login(credentials: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    existing = crud.get_user_by_email(db, email=credentials.username)
     
     if not existing or not crud.verify_password(credentials.password, existing.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")

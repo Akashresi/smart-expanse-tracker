@@ -36,6 +36,8 @@ class SavingGoalResponse(SavingGoalBase):
 
 # ... (Expense schemas are fine) ...
 class ExpenseBase(BaseModel):
+  type: str
+  source: str
   category: str
   amount: float
   date: Optional[DateType] = Field(default_factory=DateType.today) 

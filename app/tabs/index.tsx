@@ -2,17 +2,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import {
-    Alert,
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { PieChart } from "react-native-chart-kit";
 // ✅ FIX: Corrected paths to go up two levels
 import { useIsFocused } from '@react-navigation/native';
+import api from "../../api/api";
 import AppButton from "../../components/AppButton";
 import AppTextInput from "../../components/AppTextInput";
 import ScreenWrapper from "../../components/ScreenWrapper";
@@ -43,7 +44,7 @@ export default function HomeTab() {
   const [spendingAmount, setSpendingAmount] = useState("");
   const [spendCategory, setSpendCategory] = useState("");
   const [spendSource, setSpendSource] = useState<"bank" | "cash">("bank");
-  
+
   const isFocused = useIsFocused();
 
   const calculateBalancesAndSpendings = (txs: Transaction[]) => {
@@ -68,12 +69,22 @@ export default function HomeTab() {
 
   const loadTransactions = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed: Transaction[] = JSON.parse(raw);
-        setTransactions(parsed);
-        calculateBalancesAndSpendings(parsed);
-      }
+      const res = await api.get("/expenses/");
+      // Map the backend DB expenses back to frontend Transaction type
+      const parsed: Transaction[] = res.data.map((e: any) => ({
+        id: e.id.toString(),
+        type: e.type,
+        amount: e.amount,
+        category: e.category,
+        source: e.source,
+        note: e.description || "",
+        timestamp: e.date,
+      }));
+      // Sort oldest to newest or newest to oldest
+      parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      setTransactions(parsed);
+      calculateBalancesAndSpendings(parsed);
     } catch (e) {
       console.warn("Load transactions error", e);
     }
@@ -85,36 +96,39 @@ export default function HomeTab() {
     }
   }, [isFocused, loadTransactions]);
 
-  const saveTransaction = async (newTx: Transaction) => {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const current = raw ? JSON.parse(raw) : [];
-      const updated = [newTx, ...current];
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setTransactions(updated);
-      calculateBalancesAndSpendings(updated);
-    } catch (e) { console.warn("Persist error", e); }
-  };
-
   const addBalance = async () => {
     const amount = parseFloat(addAmount);
     if (!amount || amount <= 0 || !addCategory.trim()) {
       Alert.alert("Invalid Input", "Please enter valid amount and category.");
       return;
     }
-    const tx: Transaction = {
-      id: Date.now().toString(),
-      type: "credit",
-      amount,
-      category: addCategory.trim(),
-      source: addSource,
-      note: `Added ₹${amount} to ${addSource}`,
-      timestamp: new Date().toISOString(),
-    };
-    await saveTransaction(tx);
-    setAddAmount("");
-    setAddCategory("");
-    Alert.alert("Success", `₹${amount} added to ${addSource} balance.`);
+
+    try {
+      const userStr = await AsyncStorage.getItem("@user");
+      if (!userStr) {
+        Alert.alert("Error", "Not logged in");
+        return;
+      }
+      const user = JSON.parse(userStr);
+
+      const payload = {
+        type: "credit",
+        source: addSource,
+        category: addCategory.trim(),
+        amount: amount,
+        description: `Added ₹${amount} to ${addSource}`,
+        user_id: user.id
+      };
+
+      await api.post("/expenses/", payload);
+      setAddAmount("");
+      setAddCategory("");
+      Alert.alert("Success", `₹${amount} added to ${addSource} balance.`);
+      loadTransactions();
+    } catch (e) {
+      console.warn("Error adding balance", e);
+      Alert.alert("Error", "Failed to add balance to server.");
+    }
   };
 
   const addSpending = async () => {
@@ -128,19 +142,33 @@ export default function HomeTab() {
       Alert.alert("Insufficient Funds", `Not enough ${spendSource} balance.`);
       return;
     }
-    const tx: Transaction = {
-      id: Date.now().toString(),
-      type: "debit",
-      amount,
-      category: spendCategory.trim(),
-      source: spendSource,
-      note: `Spent ₹${amount} from ${spendSource}`,
-      timestamp: new Date().toISOString(),
-    };
-    await saveTransaction(tx);
-    setSpendingAmount("");
-    setSpendCategory("");
-    Alert.alert("Success", `₹${amount} spent from ${spendSource}.`);
+
+    try {
+      const userStr = await AsyncStorage.getItem("@user");
+      if (!userStr) {
+        Alert.alert("Error", "Not logged in");
+        return;
+      }
+      const user = JSON.parse(userStr);
+
+      const payload = {
+        type: "debit",
+        source: spendSource,
+        category: spendCategory.trim(),
+        amount: amount,
+        description: `Spent ₹${amount} from ${spendSource}`,
+        user_id: user.id
+      };
+
+      await api.post("/expenses/", payload);
+      setSpendingAmount("");
+      setSpendCategory("");
+      Alert.alert("Success", `₹${amount} spent from ${spendSource}.`);
+      loadTransactions();
+    } catch (e) {
+      console.warn("Error adding spending", e);
+      Alert.alert("Error", "Failed to add spending to server.");
+    }
   };
 
   const spendingOnly = transactions.filter((t) => t.type === "debit");
@@ -151,9 +179,8 @@ export default function HomeTab() {
   const pieData = Object.entries(categoryTotals).map(([name, amt], i) => ({
     name,
     population: amt,
-    color: `rgba(${(i * 60) % 255}, ${(150 + i * 30) % 255}, ${
-      (100 + i * 20) % 255
-    }, 1)`,
+    color: `rgba(${(i * 60) % 255}, ${(150 + i * 30) % 255}, ${(100 + i * 20) % 255
+      }, 1)`,
     legendFontColor: "#7F7F7F",
     legendFontSize: 12,
   }));

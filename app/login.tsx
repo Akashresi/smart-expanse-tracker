@@ -3,11 +3,11 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import api from "../api/api";
-import AppButton from "../components/AppButton"; 
-import AppTextInput from "../components/AppTextInput"; 
-import ScreenWrapper from "../components/ScreenWrapper"; 
+import AppButton from "../components/AppButton";
+import AppTextInput from "../components/AppTextInput";
+import ScreenWrapper from "../components/ScreenWrapper";
+import { COLORS, SIZING } from "../constants/theme";
 import { useAuth } from "../contexts/AuthContext";
-import { COLORS, SIZING } from "../constants/theme"; 
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -24,12 +24,18 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const res = await api.post("/auth/login", { email, password });
+      const formData = new FormData();
+      formData.append("username", email);
+      formData.append("password", password);
+
+      const res = await api.post("/auth/login", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       if (res.data && res.data.user && res.data.access_token) {
         const user = res.data.user;
         const token = res.data.access_token;
-        
+
         await login(user, token); // This function now handles storage
 
         Alert.alert("Login successful");
@@ -46,7 +52,7 @@ export default function Login() {
   };
 
   return (
-    <ScreenWrapper style={styles.container}> 
+    <ScreenWrapper style={styles.container}>
       <Text style={styles.title}>Welcome Back!</Text>
 
       <AppTextInput
@@ -112,13 +118,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: SIZING.md,
   },
-  signupText: { 
-    textAlign: "center", 
+  signupText: {
+    textAlign: "center",
     fontSize: SIZING.body,
     color: COLORS.grayDark,
   },
-  signupLinkText: { 
-    color: COLORS.primary, 
-    fontWeight: "600" 
+  signupLinkText: {
+    color: COLORS.primary,
+    fontWeight: "600"
   },
 });

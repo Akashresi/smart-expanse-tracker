@@ -72,7 +72,7 @@ def analyze_user_expenses(db: Session, user_id: int) -> dict:
     start_of_month = now.replace(day=1)
     end_of_last_month = start_of_month - timedelta(days=1)
     start_of_last_month = end_of_last_month.replace(day=1)
-    user_expenses_query = db.query(Expense).filter(Expense.user_id == user_id)
+    user_expenses_query = db.query(Expense).filter(Expense.user_id == user_id, Expense.type == "debit")
     def sum_in_range(start_date, end_date):
         total = user_expenses_query.filter(
             Expense.date >= start_date,

@@ -29,6 +29,8 @@ class Expense(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    type = Column(String(20), nullable=False, default="debit")
+    source = Column(String(20), nullable=False, default="bank")
     category = Column(String(50), nullable=False)
     amount = Column(Float, nullable=False)
     description = Column(Text, nullable=True)
