@@ -31,6 +31,7 @@ export const SIZING = {
   caption: 12,
   h1: 24,
   h2: 20,
+  h3: 18,
 };
 
 export const SPACING = {

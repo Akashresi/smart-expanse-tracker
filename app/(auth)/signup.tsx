@@ -21,9 +21,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import api from '../../api/api';
 import { COLORS } from '../../constants/theme';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Signup() {
   const router = useRouter();
+  const { login } = useAuth();
 
   const [form, setForm] = useState({
     fullName: '',
@@ -53,7 +55,7 @@ export default function Signup() {
         break;
       case 'username':
         const unRegex = /^[a-zA-Z0-9_]+$/;
-        if (!value || typeof value !== 'string' || value.length < 3) err = 'Username must be at least 3 characters';
+        if (!value || typeof value !== 'string' || value.length < 2) err = 'Username must be at least 2 characters';
         else if (!unRegex.test(value)) err = 'Username can only contain letters, numbers, _';
         break;
       case 'email':
@@ -138,7 +140,7 @@ export default function Signup() {
     setIsLoading(true);
     try {
       const payload = {
-        name: form.fullName, // matching backend schema currently
+        full_name: form.fullName, // matching backend schema
         username: form.username,
         email: form.email,
         phone: form.phone,
@@ -151,11 +153,16 @@ export default function Signup() {
       
       if (res.status === 200 || res.status === 201) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace('./tabs/home'); // Usually home is inside tabs
+        
+        if (res.data?.user && res.data?.access_token) {
+          await login(res.data.user, res.data.access_token);
+        }
+
+        router.replace('/tabs');
       }
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setApiError(e?.response?.data?.detail || 'An unexpected error occurred during sign up.');
+      setApiError(e?.response?.data?.detail || e.message || 'An unexpected error occurred during sign up.');
     } finally {
       setIsLoading(false);
     }
@@ -219,7 +226,7 @@ export default function Signup() {
               onChangeText={(txt) => handleChange('username', txt)}
               onBlur={() => handleBlur('username')}
             />
-             {touched.username && !errors.username && form.username.length > 2 && (
+             {touched.username && !errors.username && form.username.length > 1 && (
               <Ionicons name="checkmark-circle" size={18} color={COLORS.success} />
             )}
           </View>

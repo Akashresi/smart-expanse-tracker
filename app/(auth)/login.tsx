@@ -63,7 +63,7 @@ export default function Login() {
       if (res.data?.user && res.data?.access_token) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await login(res.data.user, res.data.access_token);
-        router.replace('./tabs/home'); // Usually tabs is the root
+        router.replace('/tabs');
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setError('Login failed: Unexpected response.');

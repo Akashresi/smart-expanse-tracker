@@ -6,7 +6,7 @@
 // Replace LAN_IP with your machine IP if you're running on a device.
 
 
-const LAN_IP = "10.47.24.210"; // <<< REPLACE this with your machine IP when using a physical device
+const LAN_IP = "192.168.31.42"; // <<< REPLACE this with your machine IP when using a physical device
 const PORT = "8000";
 
 export const DEFAULTS: Record<string, string> = {
