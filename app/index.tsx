@@ -7,7 +7,7 @@ export default function Index() {
   
   // If user object exists in AuthContext, they are authenticated
   if (user) {
-    return <Redirect href="/(tabs)/home" />; // Redirect to premium Home
+    return <Redirect href="./(tabs)/home" />; // Redirect to premium Home
   }
   
   return <Redirect href="/(auth)/login" />;

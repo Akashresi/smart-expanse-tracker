@@ -9,9 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert
+  Alert,
+  Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
+
+const { height } = Dimensions.get('window');
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -148,7 +151,7 @@ export default function Signup() {
       
       if (res.status === 200 || res.status === 201) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace('/(tabs)/home'); // Usually home is inside tabs
+        router.replace('./tabs/home'); // Usually home is inside tabs
       }
     } catch (e: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
