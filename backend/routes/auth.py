@@ -11,7 +11,7 @@ import models # ✅ Import models
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 365 # 1 year
 
 @router.post("/register", response_model=schemas.RegisterResponse)
 def register(user: schemas.UserCreate, db: Session = Depends(get_db)):

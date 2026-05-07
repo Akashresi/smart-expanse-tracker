@@ -58,6 +58,14 @@ class ChatRequest(BaseModel):
 class ChatReply(BaseModel):
     reply: str = Field(..., description="Chatbot's generated response")
 
+class ScanRequest(BaseModel):
+    text: str = Field(..., description="Raw SMS or notification text")
+class ScanResponse(BaseModel):
+    amount: float
+    source: str
+    category: str
+    type: str
+
 
 # ---------- AUTH SCHEMAS ----------
 class LoginRequest(BaseModel):

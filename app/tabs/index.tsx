@@ -157,16 +157,17 @@ export default function HomeTab() {
   const handleSubmit = async () => {
     if (modalType === "scan") {
       if (!scanText.trim()) return;
-      const text = scanText.toLowerCase();
-      const isCredit = text.includes("credited") || text.includes("added") || text.includes("received");
-      const src = text.includes("cash") ? "cash" : "bank";
-      const amountMatch = text.match(/\d+(\.\d+)?/);
-      const amt = amountMatch ? amountMatch[0] : "0";
-      
-      setAmount(amt);
-      setSource(src);
-      setCategory("Misc");
-      setModalType(isCredit ? "balance" : "spending");
+      try {
+        const res = await api.post("/chatbot/scan", { text: scanText });
+        const data = res.data;
+        setAmount(data.amount.toString());
+        setSource(data.source || "bank");
+        setCategory(data.category || "Misc");
+        setModalType(data.type === "credit" ? "balance" : "spending");
+      } catch (e) {
+        console.warn("Scan error", e);
+        Alert.alert("Scan Failed", "Could not analyze the text.");
+      }
       return;
     }
 

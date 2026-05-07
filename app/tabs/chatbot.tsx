@@ -6,13 +6,7 @@ import { Send, Bot } from 'lucide-react-native';
 import { ChatMessage } from '../../types';
 import { useThemeColors, SIZING, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 
-const SAMPLE_RESPONSES: { [key: string]: string } = {
-  'spending': 'Based on your recent expenses, you spent ₹850.50 this week. Your top category is Food & Dining at ₹455.50.',
-  'budget': 'You have a monthly budget of ₹5000 for Food & Dining. So far, you\'ve spent ₹850.50, which is 17% of your budget.',
-  'save': 'To boost your savings: 1) Reduce dining out by ₹800/month, 2) Review subscriptions, 3) Set up automatic transfers of ₹2000/month to savings.',
-  'travel': 'You spent ₹150.00 on travel last month for cabs.',
-  'default': 'I can help you analyze your spending patterns, track budgets, and provide savings recommendations. Try asking about your spending, budgets, or ways to save more!',
-};
+import api from '../../api/api';
 
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -78,14 +72,7 @@ export default function ChatbotScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages, isTyping]);
 
-  const getResponse = (query: string): string => {
-    const lowerQuery = query.toLowerCase();
-    if (lowerQuery.includes('spend') || lowerQuery.includes('spent')) return SAMPLE_RESPONSES.spending;
-    if (lowerQuery.includes('budget')) return SAMPLE_RESPONSES.budget;
-    if (lowerQuery.includes('save') || lowerQuery.includes('saving')) return SAMPLE_RESPONSES.save;
-    if (lowerQuery.includes('travel') || lowerQuery.includes('transport')) return SAMPLE_RESPONSES.travel;
-    return SAMPLE_RESPONSES.default;
-  };
+
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -99,20 +86,35 @@ export default function ChatbotScreen() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputText;
     setInputText('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const botResponse: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        message: '',
-        response: getResponse(userMessage.message),
-        timestamp: new Date(),
-        isUser: false,
-      };
-      setIsTyping(false);
-      setMessages(prev => [...prev, botResponse]);
-    }, 1500); // 1.5s delay to show typing indicator
+    const fetchBotReply = async () => {
+      try {
+        const res = await api.post("/chatbot/", { message: currentInput });
+        const botResponse: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          message: '',
+          response: res.data.reply || "Sorry, I couldn't process that.",
+          timestamp: new Date(),
+          isUser: false,
+        };
+        setIsTyping(false);
+        setMessages(prev => [...prev, botResponse]);
+      } catch (e) {
+        setIsTyping(false);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          message: '',
+          response: "Network error. Make sure you have configured the GEMINI_API_KEY in the backend.",
+          timestamp: new Date(),
+          isUser: false,
+        }]);
+      }
+    };
+    
+    fetchBotReply();
   };
 
   const QuickQuestion = ({ question, onPress }: { question: string; onPress: () => void }) => (
