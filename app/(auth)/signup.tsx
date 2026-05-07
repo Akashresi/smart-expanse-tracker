@@ -20,10 +20,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import api from '../../api/api';
-import { COLORS } from '../../constants/theme';
+import { useThemeColors } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function Signup() {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
+
   const router = useRouter();
   const { login } = useAuth();
 
@@ -416,7 +419,7 @@ export default function Signup() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',

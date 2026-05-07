@@ -1,12 +1,15 @@
 // app/tabs/analytics.tsx
-import { AlertCircle, TrendingUp } from "lucide-react-native";
+import { AlertCircle, TrendingUp, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Dimensions, StyleSheet, Text, View, TouchableOpacity, ScrollView } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-chart-kit";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from 'expo-linear-gradient';
 import api from "../../api/api";
 import { useAuth } from "../../contexts/AuthContext";
-import ScreenWrapper from "../../components/ScreenWrapper";
-import { COLORS, SIZING } from "../../constants/theme";
+import { useThemeColors, SIZING, SHADOWS, SPACING, TYPOGRAPHY } from "../../constants/theme";
+
+const { width } = Dimensions.get("window");
 
 interface Expense {
   id: number;
@@ -25,22 +28,31 @@ interface CategoryData {
 }
 
 export default function AnalyticsScreen() {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
+
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categorySpending, setCategorySpending] = useState<CategoryData[]>([]);
   const [weeklyData, setWeeklyData] = useState<number[]>([]);
   const [monthlyData, setMonthlyData] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showTip, setShowTip] = useState(true);
 
-  const chartWidth = Dimensions.get("window").width - SIZING.lg * 2;
+  const chartWidth = width - SPACING.md * 2 - 32;
 
   const chartConfig = {
-    backgroundColor: COLORS.white,
-    backgroundGradientFrom: COLORS.white,
-    backgroundGradientTo: COLORS.white,
+    backgroundColor: COLORS.card,
+    backgroundGradientFrom: COLORS.card,
+    backgroundGradientTo: COLORS.card,
     decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+    color: (opacity = 1) => `rgba(26, 86, 219, ${opacity})`, // primary color
+    labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`, // textMuted
+    propsForDots: {
+      r: "4",
+      strokeWidth: "2",
+      stroke: COLORS.card
+    }
   };
 
   useEffect(() => {
@@ -48,13 +60,11 @@ export default function AnalyticsScreen() {
       if (!user?.id) return; 
       setLoading(true);
       try {
-        // This route should be protected and get user from token
         const res = await api.get(`/expenses/`); 
         const data = res.data || [];
         setExpenses(data);
         processAnalytics(data);
       } catch (error) {
-        console.error("Error fetching expenses:", error);
         setExpenses([]);
       } finally {
         setLoading(false);
@@ -96,182 +106,224 @@ export default function AnalyticsScreen() {
       name,
       amount,
       color: `rgba(${(i * 60) % 255}, ${(150 + i * 30) % 255}, ${(100 + i * 20) % 255}, 1)`,
-      legendFontColor: "#333",
-      legendFontSize: 12,
+      legendFontColor: COLORS.textPrimary,
+      legendFontSize: 13,
     }));
     setCategorySpending(categoryList);
   };
 
   const totalSpent = categorySpending.reduce((sum, c) => sum + c.amount, 0);
+  const isHealthy = totalSpent < 50000; // Arbitrary metric for color highlight
 
   if (loading) {
     return (
-      <ScreenWrapper style={styles.center}>
+      <View style={[styles.container, {justifyContent: 'center', alignItems: 'center'}]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading Analytics...</Text>
-      </ScreenWrapper>
+      </View>
     );
   }
 
+  const EmptyState = () => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconBg}>
+        <Ionicons name="bar-chart" size={48} color={COLORS.primary} />
+      </View>
+      <Text style={styles.emptyTitle}>No Insights Yet</Text>
+      <Text style={styles.emptySub}>Add your first expense to see your financial trends and insights here.</Text>
+    </View>
+  );
+
   return (
-    <ScreenWrapper scrollable style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 100}}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>📊 Analytics</Text>
+        <Text style={TYPOGRAPHY.heading}>Analytics</Text>
       </View>
 
-      <View style={styles.insightCard}>
-        <View style={styles.insightHeader}>
-          <TrendingUp size={24} color="#10b981" />
-          <Text style={styles.insightTitle}>Spending Insights</Text>
-        </View>
-        {expenses.length > 0 ? (
-          <Text style={styles.insightText}>
-            You spent a total of ₹{totalSpent.toFixed(2)} this period.
+      {expenses.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <>
+          <LinearGradient 
+            colors={isHealthy ? [COLORS.success, '#10b981'] : [COLORS.warning, '#d97706']} 
+            style={styles.insightCard} 
+            start={{x: 0, y: 0}} 
+            end={{x: 1, y: 1}}
+          >
+            <View style={styles.insightHeader}>
+              <TrendingUp size={22} color="#ffffff" />
+              <Text style={styles.insightTitle}>Spending Insights</Text>
+            </View>
+            <Text style={styles.insightText}>
+              You spent a total of ₹{totalSpent.toFixed(2)} this period.
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Monthly Trend</Text>
+            <View style={styles.chartCard}>
+              {monthlyData.length === 0 ? (
+                <Text style={styles.noDataText}>No monthly data available</Text>
+              ) : (
+                <LineChart
+                  data={{
+                    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+                    datasets: [{ data: monthlyData }],
+                  }}
+                  width={chartWidth}
+                  height={180}
+                  chartConfig={{
+                    ...chartConfig,
+                    color: (opacity = 1) => `rgba(26, 86, 219, ${opacity})`,
+                  }}
+                  bezier
+                  style={styles.chart}
+                  withInnerLines={false}
+                  withOuterLines={false}
+                />
+              )}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Weekly Spending</Text>
+            <View style={styles.chartCard}>
+            {weeklyData.reduce((a, b) => a + b, 0) === 0 ? (
+              <Text style={styles.noDataText}>No weekly data available</Text>
+            ) : (
+              <BarChart
+                data={{
+                  labels: ["M", "T", "W", "T", "F", "S", "S"],
+                  datasets: [{ data: weeklyData }],
+                }}
+                width={chartWidth}
+                height={180}
+                chartConfig={{
+                  ...chartConfig,
+                  color: () => COLORS.primary,
+                }}
+                yAxisLabel="₹"
+                yAxisSuffix=""
+                style={styles.chart}
+                showBarTops={false}
+                withInnerLines={false}
+              />
+            )}
+            </View>
+          </View>
+
+          <View style={styles.section}> 
+            <Text style={styles.sectionTitle}>Category Breakdown</Text>
+            <View style={styles.chartCard}>
+              {categorySpending.length === 0 ? (
+                <Text style={styles.noDataText}>No expenses yet</Text>
+              ) : (
+                <PieChart
+                  data={categorySpending}
+                  width={chartWidth + 30}
+                  height={180}
+                  chartConfig={chartConfig}
+                  accessor="amount"
+                  backgroundColor="transparent"
+                  paddingLeft="15"
+                  absolute
+                />
+              )}
+            </View>
+          </View>
+        </>
+      )}
+
+      {showTip && (
+        <View style={styles.tipCard}>
+          <TouchableOpacity 
+            style={styles.tipClose} 
+            onPress={() => setShowTip(false)}
+            hitSlop={{top: 10, right: 10, bottom: 10, left: 10}}
+          >
+            <X size={16} color={COLORS.textMuted} />
+          </TouchableOpacity>
+          <View style={styles.tipHeader}>
+            <AlertCircle size={20} color={COLORS.warning} />
+            <Text style={styles.tipTitle}>Smart Tip</Text>
+          </View>
+          <Text style={styles.tipText}>
+            Try setting a budget for your top spending category to save more!
           </Text>
-        ) : (
-          <Text style={styles.insightText}>No spending data yet.</Text>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📆 Monthly Trend</Text>
-        <View style={styles.chartCard}>
-          {monthlyData.length === 0 ? (
-            <Text style={styles.noDataText}>No monthly data available</Text>
-          ) : (
-            <LineChart
-              data={{
-                labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-                datasets: [{ data: monthlyData }],
-              }}
-              width={chartWidth}
-              height={220}
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chart}
-            />
-          )}
         </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>📅 Weekly Spending</Text>
-        <View style={styles.chartCard}>
-        {weeklyData.reduce((a, b) => a + b, 0) === 0 ? (
-          <Text style={styles.noDataText}>No weekly data available</Text>
-        ) : (
-          <BarChart
-            data={{
-              labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-              datasets: [{ data: weeklyData }],
-            }}
-            width={chartWidth}
-            height={220}
-            chartConfig={chartConfig}
-            yAxisLabel="₹"
-            yAxisSuffix=""
-            style={styles.chart}
-          />
-        )}
-        </View>
-      </View>
-
-      <View style={styles.section}> 
-        <Text style={styles.sectionTitle}>💰 Category Breakdown</Text>
-        <View style={styles.chartCard}>
-          {categorySpending.length === 0 ? (
-            <Text style={styles.noDataText}>No expenses yet</Text>
-          ) : (
-            <PieChart
-              data={categorySpending}
-              width={chartWidth}
-              height={220}
-              chartConfig={chartConfig}
-              accessor="amount"
-              backgroundColor="transparent"
-              paddingLeft="15"
-              absolute
-            />
-          )}
-        </View>
-      </View>
-
-      <View style={styles.tipCard}>
-        <View style={styles.tipHeader}>
-          <AlertCircle size={24} color={COLORS.warning} />
-          <Text style={styles.tipTitle}>Smart Tip</Text>
-        </View>
-        <Text style={styles.tipText}>
-          Try setting a budget for your top spending category to save more!
-        </Text>
-      </View>
-    </ScreenWrapper>
+      )}
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.grayLight,
-  },
-  loadingText: {
-    marginTop: SIZING.sm,
-    color: COLORS.grayDark,
-    fontSize: SIZING.body,
-  },
-  container: { backgroundColor: COLORS.grayLight, padding: 0 },
+const getStyles = (COLORS: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
-    padding: SIZING.lg,
-    borderBottomColor: COLORS.grayMedium,
-    borderBottomWidth: 1,
-    backgroundColor: COLORS.white,
+    padding: SPACING.md,
+    paddingTop: 50,
   },
-  headerTitle: { fontSize: SIZING.h1, fontWeight: "700", color: COLORS.text },
+  loadingText: { marginTop: 12, color: COLORS.textMuted, fontSize: 16 },
+  
   insightCard: {
-    backgroundColor: "#ecfdf5",
-    margin: SIZING.lg,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
     borderRadius: SIZING.radius,
-    padding: SIZING.md,
-    borderColor: "#a7f3d0",
-    borderWidth: 1,
+    padding: SPACING.md,
+    ...SHADOWS.sm,
   },
-  insightHeader: { flexDirection: "row", alignItems: "center", marginBottom: SIZING.sm },
-  insightTitle: {
-    fontSize: SIZING.body,
-    fontWeight: "600",
-    color: "#065f46",
-    marginLeft: SIZING.sm,
-  },
-  insightText: { fontSize: SIZING.caption, color: "#047857" },
-  section: { marginHorizontal: SIZING.lg, marginBottom: SIZING.lg },
-  sectionTitle: {
-    fontSize: SIZING.h3,
-    fontWeight: "600",
-    marginBottom: SIZING.sm,
-    color: COLORS.text,
-  },
+  insightHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  insightTitle: { fontSize: 16, fontWeight: "600", color: "#ffffff", marginLeft: 8 },
+  insightText: { fontSize: 14, color: "rgba(255,255,255,0.9)" },
+  
+  section: { marginHorizontal: SPACING.md, marginBottom: SPACING.lg },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: COLORS.textPrimary, marginBottom: 12 },
   chartCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.card,
     borderRadius: SIZING.radius,
-    paddingTop: SIZING.md,
-    elevation: 3,
-    alignItems: "center",
-  },
-  chart: { 
-    borderRadius: SIZING.radius, 
-    marginVertical: SIZING.sm 
-  },
-  noDataText: { color: COLORS.grayDark, paddingVertical: 40 },
-  tipCard: {
-    backgroundColor: "#fffbeb",
-    margin: SIZING.lg,
-    borderRadius: SIZING.radius,
-    padding: SIZING.md,
+    padding: 16,
+    ...SHADOWS.sm,
     borderWidth: 1,
-    borderColor: "#fde68a",
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  tipHeader: { flexDirection: "row", alignItems: "center", marginBottom: SIZING.sm },
-  tipTitle: { fontSize: SIZING.body, fontWeight: "600", color: "#92400e", marginLeft: SIZING.sm },
-  tipText: { color: "#b45309", fontSize: SIZING.caption },
+  chart: { borderRadius: SIZING.radius },
+  noDataText: { color: COLORS.textMuted, paddingVertical: 40, fontSize: 14 },
+  
+  tipCard: {
+    backgroundColor: COLORS.warning + '15',
+    marginHorizontal: SPACING.md,
+    borderRadius: SIZING.radius,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.warning + '40',
+    position: 'relative'
+  },
+  tipClose: { position: 'absolute', top: 12, right: 12, zIndex: 10 },
+  tipHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  tipTitle: { fontSize: 15, fontWeight: "600", color: COLORS.warning, marginLeft: 8 },
+  tipText: { color: COLORS.textPrimary, fontSize: 13, lineHeight: 18 },
+
+  emptyState: {
+    alignItems: 'center',
+    marginHorizontal: SPACING.lg,
+    marginTop: 40,
+    padding: SPACING.lg,
+    backgroundColor: COLORS.card,
+    borderRadius: SIZING.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed'
+  },
+  emptyIconBg: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 20 }
 });

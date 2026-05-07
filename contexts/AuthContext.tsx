@@ -4,11 +4,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type User = {
   id: number;
-  name: string;
+  name?: string;
+  full_name?: string;
+  username?: string;
   email: string;
-  date_of_birth: string;
-  age: number;
-  gender: string;
+  date_of_birth?: string;
+  age?: number;
+  gender?: string;
 };
 
 type AuthContextType = {

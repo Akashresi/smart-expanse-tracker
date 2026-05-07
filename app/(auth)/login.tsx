@@ -20,11 +20,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import api from '../../api/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { COLORS, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+import { useThemeColors, SPACING, TYPOGRAPHY, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 
 const { height } = Dimensions.get('window');
 
 export default function Login() {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
+
   const router = useRouter();
   const { login } = useAuth();
 
@@ -74,10 +77,6 @@ export default function Login() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    Alert.alert('Coming Soon', 'Google sign-in will be available soon!');
   };
 
   return (
@@ -191,26 +190,7 @@ export default function Login() {
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>  OR  </Text>
-            <View style={styles.dividerLine} />
-          </View>
 
-          {/* Google Button */}
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin}>
-            <Text style={styles.googleIconText}>G</Text>
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-
-          {/* Biometric Placeholder */}
-          <View style={styles.biometricContainer}>
-            <TouchableOpacity onPress={() => Alert.alert('Coming soon!')} style={styles.biometricBtn}>
-              <Ionicons name="finger-print" size={32} color={COLORS.primary} />
-            </TouchableOpacity>
-            <Text style={styles.biometricText}>Use Biometric Login</Text>
-          </View>
 
           {/* Footer Link */}
           <View style={styles.footer}>
@@ -226,7 +206,7 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC', // fallback BG
@@ -384,41 +364,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
   },
-  googleButton: {
-    width: '100%',
-    height: 52,
-    backgroundColor: COLORS.card,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 26,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  googleIconText: {
-    fontWeight: 'bold',
-    fontSize: 18,
-    color: '#4285F4',
-    marginRight: 10,
-  },
-  googleButtonText: {
-    color: '#0F172A',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  biometricContainer: {
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  biometricBtn: {
-    padding: 8,
-  },
-  biometricText: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
-  },
+
+
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',

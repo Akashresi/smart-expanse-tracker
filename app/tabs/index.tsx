@@ -1,6 +1,5 @@
-// app/tabs/index.tsx
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -9,15 +8,21 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
+  Animated,
+  Platform,
+  KeyboardAvoidingView
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { PieChart } from "react-native-chart-kit";
-// ✅ FIX: Corrected paths to go up two levels
 import { useIsFocused } from '@react-navigation/native';
 import api from "../../api/api";
 import AppButton from "../../components/AppButton";
 import AppTextInput from "../../components/AppTextInput";
-import ScreenWrapper from "../../components/ScreenWrapper";
-import { COLORS, SIZING } from "../../constants/theme";
+import { useThemeColors, SIZING, SHADOWS } from "../../constants/theme";
+
+const { width, height } = Dimensions.get("window");
 
 type Transaction = {
   id: string;
@@ -29,29 +34,87 @@ type Transaction = {
   timestamp: string;
 };
 
-const STORAGE_KEY = "@transactions";
-const spendingCategories = ["Food", "Transport", "Shopping", "Bills", "Misc"];
+const spendingCategories = [
+  { name: "Food", icon: "fast-food", color: "#f97316" },
+  { name: "Transport", icon: "car", color: "#3b82f6" },
+  { name: "Shopping", icon: "cart", color: "#a855f7" },
+  { name: "Bills", icon: "document-text", color: "#ef4444" },
+  { name: "Misc", icon: "cube", color: "#64748b" },
+];
 
 export default function HomeTab() {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [bankBalance, setBankBalance] = useState(0);
   const [cashBalance, setCashBalance] = useState(0);
   const [bankSpending, setBankSpending] = useState(0);
   const [cashSpending, setCashSpending] = useState(0);
-  const [addAmount, setAddAmount] = useState("");
-  const [addCategory, setAddCategory] = useState("");
-  const [addSource, setAddSource] = useState<"bank" | "cash">("bank");
-  const [spendingAmount, setSpendingAmount] = useState("");
-  const [spendCategory, setSpendCategory] = useState("");
-  const [spendSource, setSpendSource] = useState<"bank" | "cash">("bank");
+
+  // Modal states
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState<"balance" | "spending" | "scan">("spending");
+  const slideAnim = useRef(new Animated.Value(height)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Form states
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
+  const [source, setSource] = useState<"bank" | "cash">("bank");
+  const [scanText, setScanText] = useState("");
 
   const isFocused = useIsFocused();
 
+  // Mount animation
+  const mountAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(mountAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const openModal = (type: "balance" | "spending" | "scan") => {
+    setModalType(type);
+    setAmount("");
+    setCategory("");
+    setSource("bank");
+    setScanText("");
+    setModalVisible(true);
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
+
+  const closeModal = () => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: height,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      })
+    ]).start(() => setModalVisible(false));
+  };
+
   const calculateBalancesAndSpendings = (txs: Transaction[]) => {
-    let bankBal = 0,
-      cashBal = 0,
-      bankSpend = 0,
-      cashSpend = 0;
+    let bankBal = 0, cashBal = 0, bankSpend = 0, cashSpend = 0;
     txs.forEach((t) => {
       if (t.source === "bank") {
         if (t.type === "credit") bankBal += t.amount;
@@ -70,7 +133,6 @@ export default function HomeTab() {
   const loadTransactions = useCallback(async () => {
     try {
       const res = await api.get("/expenses/");
-      // Map the backend DB expenses back to frontend Transaction type
       const parsed: Transaction[] = res.data.map((e: any) => ({
         id: e.id.toString(),
         type: e.type,
@@ -80,9 +142,7 @@ export default function HomeTab() {
         note: e.description || "",
         timestamp: e.date,
       }));
-      // Sort oldest to newest or newest to oldest
       parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
       setTransactions(parsed);
       calculateBalancesAndSpendings(parsed);
     } catch (e) {
@@ -91,16 +151,37 @@ export default function HomeTab() {
   }, []);
 
   useEffect(() => {
-    if (isFocused) {
-      loadTransactions();
-    }
+    if (isFocused) loadTransactions();
   }, [isFocused, loadTransactions]);
 
-  const addBalance = async () => {
-    const amount = parseFloat(addAmount);
-    if (!amount || amount <= 0 || !addCategory.trim()) {
+  const handleSubmit = async () => {
+    if (modalType === "scan") {
+      if (!scanText.trim()) return;
+      const text = scanText.toLowerCase();
+      const isCredit = text.includes("credited") || text.includes("added") || text.includes("received");
+      const src = text.includes("cash") ? "cash" : "bank";
+      const amountMatch = text.match(/\d+(\.\d+)?/);
+      const amt = amountMatch ? amountMatch[0] : "0";
+      
+      setAmount(amt);
+      setSource(src);
+      setCategory("Misc");
+      setModalType(isCredit ? "balance" : "spending");
+      return;
+    }
+
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0 || !category.trim()) {
       Alert.alert("Invalid Input", "Please enter valid amount and category.");
       return;
+    }
+
+    if (modalType === "spending") {
+      const currentBalance = source === "bank" ? bankBalance : cashBalance;
+      if (amt > currentBalance) {
+        Alert.alert("Insufficient Funds", `Not enough ${source} balance.`);
+        return;
+      }
     }
 
     try {
@@ -112,62 +193,20 @@ export default function HomeTab() {
       const user = JSON.parse(userStr);
 
       const payload = {
-        type: "credit",
-        source: addSource,
-        category: addCategory.trim(),
-        amount: amount,
-        description: `Added ₹${amount} to ${addSource}`,
+        type: modalType === "balance" ? "credit" : "debit",
+        source: source,
+        category: category.trim(),
+        amount: amt,
+        description: modalType === "balance" ? `Added ₹${amt} to ${source}` : `Spent ₹${amt} from ${source}`,
         user_id: user.id
       };
 
       await api.post("/expenses/", payload);
-      setAddAmount("");
-      setAddCategory("");
-      Alert.alert("Success", `₹${amount} added to ${addSource} balance.`);
+      closeModal();
       loadTransactions();
     } catch (e) {
-      console.warn("Error adding balance", e);
-      Alert.alert("Error", "Failed to add balance to server.");
-    }
-  };
-
-  const addSpending = async () => {
-    const amount = parseFloat(spendingAmount);
-    if (!amount || amount <= 0 || !spendCategory.trim()) {
-      Alert.alert("Invalid Input", "Please enter valid amount and category.");
-      return;
-    }
-    const currentBalance = spendSource === "bank" ? bankBalance : cashBalance;
-    if (amount > currentBalance) {
-      Alert.alert("Insufficient Funds", `Not enough ${spendSource} balance.`);
-      return;
-    }
-
-    try {
-      const userStr = await AsyncStorage.getItem("@user");
-      if (!userStr) {
-        Alert.alert("Error", "Not logged in");
-        return;
-      }
-      const user = JSON.parse(userStr);
-
-      const payload = {
-        type: "debit",
-        source: spendSource,
-        category: spendCategory.trim(),
-        amount: amount,
-        description: `Spent ₹${amount} from ${spendSource}`,
-        user_id: user.id
-      };
-
-      await api.post("/expenses/", payload);
-      setSpendingAmount("");
-      setSpendCategory("");
-      Alert.alert("Success", `₹${amount} spent from ${spendSource}.`);
-      loadTransactions();
-    } catch (e) {
-      console.warn("Error adding spending", e);
-      Alert.alert("Error", "Failed to add spending to server.");
+      console.warn("Error processing transaction", e);
+      Alert.alert("Error", "Failed to process transaction.");
     }
   };
 
@@ -179,242 +218,312 @@ export default function HomeTab() {
   const pieData = Object.entries(categoryTotals).map(([name, amt], i) => ({
     name,
     population: amt,
-    color: `rgba(${(i * 60) % 255}, ${(150 + i * 30) % 255}, ${(100 + i * 20) % 255
-      }, 1)`,
-    legendFontColor: "#7F7F7F",
+    color: spendingCategories.find(c => c.name === name)?.color || `rgba(${(i * 60) % 255}, ${(150 + i * 30) % 255}, ${(100 + i * 20) % 255}, 1)`,
+    legendFontColor: COLORS.textMuted,
     legendFontSize: 12,
   }));
 
+  const totalSpent = bankSpending + cashSpending;
+  const totalBalance = bankBalance + cashBalance;
+  const spendRatio = totalBalance > 0 ? (totalSpent / (totalBalance + totalSpent)) * 100 : 0;
+
   return (
-    // ✅ FIX: The ScreenWrapper now has children, fixing the error
-    <ScreenWrapper scrollable>
-      <Text style={styles.header}>Your Finances</Text>
-
-      {/* This View uses the 'bankBalance' and 'cashBalance' variables */}
-      <View style={styles.summaryCard}>
-        <View>
-          <Text style={styles.summaryLabel}>🏦 Bank Balance</Text>
-          <Text style={styles.summaryValue}>₹{bankBalance.toFixed(2)}</Text>
-          <Text style={styles.spendText}>
-            Spent: ₹{bankSpending.toFixed(2)}
-          </Text>
-        </View>
-        <View>
-          <Text style={styles.summaryLabel}>💵 Cash Balance</Text>
-          <Text style={styles.summaryValue}>₹{cashBalance.toFixed(2)}</Text>
-          <Text style={styles.spendText}>
-            Spent: ₹{cashSpending.toFixed(2)}
-          </Text>
-        </View>
-      </View>
-
-      {/* This View uses 'addAmount', 'setAddAmount', 'addCategory', 'setAddCategory', 'addSource', 'setAddSource', and 'addBalance' */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Add Balance</Text>
-        <AppTextInput
-          placeholder="Amount (₹)"
-          keyboardType="numeric"
-          value={addAmount}
-          onChangeText={setAddAmount}
-        />
-        <AppTextInput
-          placeholder="Category (e.g., Salary, Gift)"
-          value={addCategory}
-          onChangeText={setAddCategory}
-        />
-        <View style={styles.sourceSwitch}>
-          <TouchableOpacity
-            style={[
-              styles.sourceButton,
-              addSource === "bank" && styles.activeSource,
-            ]}
-            onPress={() => setAddSource("bank")}
-          >
-            <Text
-              style={[
-                styles.sourceText,
-                addSource === "bank" && styles.activeText,
-              ]}
-            >
-              Bank
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.sourceButton,
-              addSource === "cash" && styles.activeSource,
-            ]}
-            onPress={() => setAddSource("cash")}
-          >
-            <Text
-              style={[
-                styles.sourceText,
-                addSource === "cash" && styles.activeText,
-              ]}
-            >
-              Cash
-            </Text>
+    <View style={styles.container}>
+      <Animated.ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        style={{ opacity: mountAnim, transform: [{ translateY: mountAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }}
+      >
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Overview</Text>
+          <TouchableOpacity style={styles.profileBtn}>
+            <Ionicons name="person-circle" size={36} color={COLORS.primary} />
           </TouchableOpacity>
         </View>
 
-        <AppButton
-          title="Add Balance"
-          onPress={addBalance}
-          variant="success"
-        />
+
+        <View style={styles.cardsContainer}>
+          <LinearGradient colors={['#1a56db', '#3b82f6']} style={styles.balanceCardVertical} start={{x: 0, y: 0}} end={{x: 1, y: 1}}>
+            <View style={styles.cardTop}>
+              <Ionicons name="business" size={24} color={COLORS.white} />
+              <Text style={styles.cardType}>Bank</Text>
+            </View>
+            <Text style={styles.cardBalance}>₹{bankBalance.toLocaleString()}</Text>
+            <View style={styles.cardBottom}>
+              <Text style={styles.cardSpent}>Spent: ₹{bankSpending.toLocaleString()}</Text>
+            </View>
+          </LinearGradient>
+
+          <LinearGradient colors={['#16a34a', '#22c55e']} style={styles.balanceCardVertical} start={{x: 0, y: 0}} end={{x: 1, y: 1}}>
+            <View style={styles.cardTop}>
+              <Ionicons name="wallet" size={24} color={COLORS.white} />
+              <Text style={styles.cardType}>Cash</Text>
+            </View>
+            <Text style={styles.cardBalance}>₹{cashBalance.toLocaleString()}</Text>
+            <View style={styles.cardBottom}>
+              <Text style={styles.cardSpent}>Spent: ₹{cashSpending.toLocaleString()}</Text>
+            </View>
+          </LinearGradient>
+        </View>
+
+
+        <View style={styles.ratioCard}>
+          <View style={styles.ratioHeader}>
+            <Text style={styles.sectionTitle}>Monthly Spend Ratio</Text>
+            <Text style={styles.ratioPercent}>{spendRatio.toFixed(0)}%</Text>
+          </View>
+          <View style={styles.ratioBarContainer}>
+            <View style={[styles.ratioBarFill, { width: `${Math.min(spendRatio, 100)}%`, backgroundColor: spendRatio > 80 ? COLORS.danger : COLORS.primary }]} />
+          </View>
+          <Text style={styles.ratioSub}>₹{totalSpent.toLocaleString()} of ₹{(totalBalance + totalSpent).toLocaleString()}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Spending by Category</Text>
+          {pieData.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="pie-chart-outline" size={48} color={COLORS.border} />
+              <Text style={styles.noDataText}>No spending data yet</Text>
+            </View>
+          ) : (
+            <View style={styles.chartCard}>
+              <PieChart
+                data={pieData}
+                width={width - 56}
+                height={160}
+                chartConfig={{ color: (opacity = 1) => `rgba(0,0,0, ${opacity})` }}
+                accessor={"population"}
+                backgroundColor={"transparent"}
+                paddingLeft={"10"}
+                absolute
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={{ height: 100 }} />
+      </Animated.ScrollView>
+
+
+      <View style={styles.fabContainer}>
+         <TouchableOpacity style={[styles.fab, {backgroundColor: COLORS.success, marginBottom: 12, width: 44, height: 44}]} onPress={() => openModal("balance")} activeOpacity={0.8}>
+          <Ionicons name="arrow-down" size={20} color={COLORS.white} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.fab, {backgroundColor: COLORS.warning, marginBottom: 12, width: 44, height: 44}]} onPress={() => openModal("scan")} activeOpacity={0.8}>
+          <Ionicons name="scan" size={20} color={COLORS.white} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.fab} onPress={() => openModal("spending")} activeOpacity={0.8}>
+          <Ionicons name="add" size={28} color={COLORS.white} />
+        </TouchableOpacity>
       </View>
 
-      {/* This View uses all the 'spending' variables and 'spendingCategories' */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Add Spending</Text>
-        <AppTextInput
-          placeholder="Amount (₹)"
-          keyboardType="numeric"
-          value={spendingAmount}
-          onChangeText={setSpendingAmount}
-        />
-        <AppTextInput
-          placeholder="Category (e.g., Food, Shopping)"
-          value={spendCategory}
-          onChangeText={setSpendCategory}
-        />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {spendingCategories.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[styles.chip, spendCategory === c && styles.chipActive]}
-              onPress={() => setSpendCategory(c)}
-            >
-              <Text
-                style={
-                  spendCategory === c ? styles.chipTextActive : styles.chipText
-                }
-              >
-                {c}
+
+      {modalVisible && (
+        <Modal transparent visible={modalVisible} animationType="none" onRequestClose={closeModal}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalBg}>
+            <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
+              <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={closeModal} />
+            </Animated.View>
+            <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
+              <View style={styles.modalDragHandle} />
+              <Text style={styles.modalTitle}>
+                {modalType === "balance" ? "Add Balance" : modalType === "scan" ? "AI Scan SMS" : "New Expense"}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        <View style={styles.sourceSwitch}>
-          <TouchableOpacity
-            style={[
-              styles.sourceButton,
-              spendSource === "bank" && styles.activeSource,
-            ]}
-            onPress={() => setSpendSource("bank")}
-          >
-            <Text
-              style={[
-                styles.sourceText,
-                spendSource === "bank" && styles.activeText,
-              ]}
-            >
-              Bank
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.sourceButton,
-              spendSource === "cash" && styles.activeSource,
-            ]}
-            onPress={() => setSpendSource("cash")}
-          >
-            <Text
-              style={[
-                styles.sourceText,
-                spendSource === "cash" && styles.activeText,
-              ]}
-            >
-              Cash
-            </Text>
-          </TouchableOpacity>
-        </View>
+              
+              {modalType === "scan" ? (
+                <>
+                  <Text style={styles.label}>Paste Notification / SMS</Text>
+                  <AppTextInput
+                    placeholder="e.g. Spent Rs. 500 at Amazon"
+                    value={scanText}
+                    onChangeText={setScanText}
+                    multiline
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>Amount (₹)</Text>
+                  <AppTextInput
+                    placeholder="0.00"
+                    keyboardType="numeric"
+                    value={amount}
+                    onChangeText={setAmount}
+                  />
 
-        <AppButton
-          title="Add Spending"
-          onPress={addSpending}
-          variant="danger"
-        />
-      </View>
+                  <Text style={styles.label}>Category</Text>
+                  {modalType === "spending" ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom: 16}}>
+                      {spendingCategories.map((c) => {
+                         const isSel = category === c.name;
+                         return (
+                          <TouchableOpacity
+                            key={c.name}
+                            style={[styles.categoryChip, isSel && { borderColor: c.color, backgroundColor: c.color + '10' }]}
+                            onPress={() => setCategory(c.name)}
+                          >
+                            <Ionicons name={c.icon as any} size={16} color={isSel ? c.color : COLORS.textMuted} />
+                            <Text style={[styles.categoryChipText, isSel && { color: c.color, fontWeight: '600' }]}>{c.name}</Text>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </ScrollView>
+                  ) : (
+                    <AppTextInput
+                      placeholder="e.g., Salary, Gift"
+                      value={category}
+                      onChangeText={setCategory}
+                    />
+                  )}
 
-      {/* This View uses 'spendingOnly' (via pieData) */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Spending by Category</Text>
-        {pieData.length === 0 ? (
-          <Text style={styles.noDataText}>No spending data yet</Text>
-        ) : (
-          <PieChart
-            data={pieData}
-            width={Dimensions.get("window").width - SIZING.lg * 2 - SIZING.md * 2}
-            height={180}
-            chartConfig={{
-              backgroundGradientFrom: "#fff",
-              backgroundGradientTo: "#fff",
-              color: (opacity = 1) => `rgba(0,0,0, ${opacity})`,
-            }}
-            accessor={"population"}
-            backgroundColor={"transparent"}
-            paddingLeft={"15"}
-            absolute
-          />
-        )}
-      </View>
-    </ScreenWrapper>
+                  <Text style={styles.label}>Source</Text>
+                  <View style={styles.sourceSwitchRow}>
+                    <TouchableOpacity
+                      style={[styles.sourceBox, source === "bank" && styles.sourceBoxActive]}
+                      onPress={() => setSource("bank")}
+                    >
+                      <Ionicons name="business" size={20} color={source === "bank" ? COLORS.primary : COLORS.textMuted} />
+                      <Text style={[styles.sourceBoxText, source === "bank" && {color: COLORS.primary, fontWeight: '600'}]}>Bank</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sourceBox, source === "cash" && styles.sourceBoxActive]}
+                      onPress={() => setSource("cash")}
+                    >
+                      <Ionicons name="wallet" size={20} color={source === "cash" ? COLORS.primary : COLORS.textMuted} />
+                      <Text style={[styles.sourceBoxText, source === "cash" && {color: COLORS.primary, fontWeight: '600'}]}>Cash</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+              <AppButton
+                title={modalType === "balance" ? "Add Funds" : modalType === "scan" ? "Scan Text" : "Save Expense"}
+                onPress={handleSubmit}
+                variant={modalType === "balance" ? "success" : modalType === "scan" ? "primary" : "primary"}
+              />
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+    </View>
   );
 }
 
-// ✅ ALL styles are now included
-const styles = StyleSheet.create({
-  header: { fontSize: SIZING.h1, fontWeight: "700", marginBottom: SIZING.md, color: COLORS.text },
-  section: {
-    marginBottom: SIZING.lg,
-    backgroundColor: COLORS.grayLight,
-    padding: SIZING.md,
-    borderRadius: SIZING.radius,
+const getStyles = (COLORS: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { paddingTop: 50, paddingBottom: 100 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  sectionTitle: { fontSize: SIZING.h3, fontWeight: "700", marginBottom: SIZING.sm, color: COLORS.text },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+  greeting: { fontSize: 26, fontWeight: '800', color: COLORS.textPrimary },
+  profileBtn: { padding: 4 },
+  cardsContainer: { paddingHorizontal: 16, paddingBottom: 20 },
+  balanceCardVertical: {
+    width: '100%',
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 16,
+    ...SHADOWS.card,
+  },
+  cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  cardType: { color: COLORS.white, fontSize: 16, fontWeight: '600', marginLeft: 8, opacity: 0.9 },
+  cardBalance: { color: COLORS.white, fontSize: 32, fontWeight: '700', marginBottom: 8 },
+  cardBottom: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignSelf: 'flex-start' },
+  cardSpent: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
+  
+  ratioCard: {
+    backgroundColor: COLORS.card,
+    marginHorizontal: 16,
+    padding: 20,
+    borderRadius: SIZING.radius,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.sm,
+  },
+  ratioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  ratioPercent: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary },
+  ratioBarContainer: { height: 8, backgroundColor: COLORS.grayLight, borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
+  ratioBarFill: { height: '100%', borderRadius: 4 },
+  ratioSub: { fontSize: 12, color: COLORS.textMuted },
+
+  section: { marginHorizontal: 16, marginBottom: 24 },
+  sectionTitle: { fontSize: 18, fontWeight: "700", color: COLORS.textPrimary, marginBottom: 12 },
+  chartCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: SIZING.radius,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    ...SHADOWS.sm,
+  },
+  emptyState: {
+    backgroundColor: COLORS.card,
+    borderRadius: SIZING.radius,
+    padding: 40,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noDataText: { color: COLORS.textMuted, marginTop: 12, fontSize: 14 },
+  
+  fabContainer: { position: 'absolute', bottom: 100, right: 20, alignItems: 'center' },
+  fab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.card,
+    elevation: 5,
+  },
+
+  modalBg: { flex: 1, justifyContent: 'flex-end' },
+  modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  modalDragHandle: { width: 40, height: 4, backgroundColor: COLORS.grayMedium, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 20 },
+  label: { fontSize: 13, color: COLORS.textMuted, marginBottom: 8, fontWeight: '500' },
+  
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.grayMedium,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
     marginRight: 8,
-    marginBottom: 8,
   },
-  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText: { color: COLORS.text },
-  chipTextActive: { color: COLORS.white },
-  sourceSwitch: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginVertical: 8,
-  },
-  sourceButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 18,
+  categoryChipText: { fontSize: 13, color: COLORS.textPrimary, marginLeft: 6 },
+  
+  sourceSwitchRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  sourceBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.grayMedium,
-    borderRadius: 20,
-    marginHorizontal: 6,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    gap: 8,
   },
-  activeSource: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  sourceText: { color: COLORS.text, fontWeight: "600" },
-  activeText: { color: COLORS.white },
-  summaryCard: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    backgroundColor: "#eef2ff",
-    padding: SIZING.md,
-    borderRadius: SIZING.radius,
-    marginBottom: SIZING.lg,
-  },
-  summaryLabel: { fontWeight: "700", color: COLORS.grayDark },
-  summaryValue: { fontSize: SIZING.h3, fontWeight: "700", color: COLORS.text },
-  spendText: { fontSize: SIZING.caption, color: COLORS.grayDark, marginTop: 2 },
-  noDataText: {
-    color: COLORS.grayDark,
-    textAlign: 'center',
-    paddingVertical: 20,
-  }
+  sourceBoxActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary + '10' },
+  sourceBoxText: { fontSize: 15, color: COLORS.textMuted },
 });

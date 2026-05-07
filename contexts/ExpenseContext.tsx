@@ -17,6 +17,7 @@ export type Expense = {
   amount: number;
   description?: string;
   date?: string;
+  source?: string;
   type: "credit" | "debit"; // This type is now required
 };
 

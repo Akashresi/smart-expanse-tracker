@@ -5,9 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { COLORS } from '../../constants/theme';
+import { useThemeColors } from '../../constants/theme';
 
 export default function ForgotPassword() {
+  const COLORS = useThemeColors();
+  const styles = getStyles(COLORS);
+
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +73,7 @@ export default function ForgotPassword() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (COLORS: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   backButton: { padding: 16, marginTop: 10 },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 100 },
